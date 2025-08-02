@@ -1,7 +1,8 @@
 from pydantic import BaseModel
+from typing import Optional
 
 class PatientInput(BaseModel):
-    name: str
+    name: Optional[str] = None
     symptoms: str
-    age: int | None = None
-    gender: str | None = None
+    age: Optional[int] = None
+    gender: Optional[str] = None
