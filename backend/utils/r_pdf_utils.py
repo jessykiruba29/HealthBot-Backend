@@ -1,11 +1,24 @@
+import fitz
 from pdfrw import PdfReader, PdfWriter, PageMerge
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 from io import BytesIO
 
-def extract_fields_from_pdf(path: str):
-    # Mock for now. Later use actual extraction.
-    return ["Name", "Date of Birth", "Address", "Phone Number"]
+import fitz  # PyMuPDF
+
+def extract_fields_from_pdf(path: str) -> list[str]:
+    doc = fitz.open(path)
+    all_text = []
+
+    for page in doc:
+        text = page.get_text()
+        lines = text.split("\n")
+        all_text.extend(lines)
+
+    # Optional cleanup
+    cleaned = [line.strip() for line in all_text if line.strip()]
+    return cleaned
+
 
 
 def fill_pdf_fields(template_path: str, data: dict):
