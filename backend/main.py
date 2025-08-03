@@ -1,33 +1,46 @@
 from fastapi import FastAPI, UploadFile, File, Form
 from typing import Optional
 import pdfplumber
-from gemini import j_get_guidance
-from gemini import ask_insurance
+import os
+from backend.gemini import j_get_guidance, ask_insurance
 
 app = FastAPI()
+
+from backend.gemini import j_get_guidance, ask_insurance, categorize_message,extract_text_from_pdf
 
 @app.post("/chat")
 async def chat_with_bot(
     message: str = Form(...),
     file: Optional[UploadFile] = File(None)
 ):
-    if file and file.filename.endswith(".pdf"):
-        contents = await file.read()
+    try:
+        if file and file.filename.endswith(".pdf"):
+           
+            pdf_path = f"/tmp/{file.filename}"
+            with open(pdf_path, "wb") as f:
+                f.write(await file.read())
+            extracted_text = extract_text_from_pdf(pdf_path)
+            os.remove(pdf_path)
 
-        with open("temp.pdf", "wb") as f:
-            f.write(contents)
+            answer = ask_insurance(extracted_text, message)
+            return {"type": "insurance", "answer": answer}
 
-        extracted_text = ""
-        with pdfplumber.open("temp.pdf") as pdf:
-            for page in pdf.pages:
-                text = page.extract_text()
-                if text:
-                    extracted_text += text + "\n"
+        else:
+            category = categorize_message(message)
+            print(f"[DEBUG] Category: {category}")
 
-        answer = ask_insurance(extracted_text, message)
-        return {"type": "insurance", "answer": answer}
+            if category == "symptom":
+                result = j_get_guidance(message)
+                return {"type": "symptom", "response": result}
+            elif category == "insurance":
+                answer = ask_insurance("", message)
+                return {"type": "insurance", "answer": answer}
+            else:
+                return {
+                    "type": "unknown",
+                    "answer": "Sorry, I couldn't understand your message."
+                }
 
-    else:
-        # Symptoms
-        result = j_get_guidance(message)
-        return {"type": "symptom", "response": result}
+    except Exception as e:
+        print(f"[ERROR] {str(e)}")
+        return {"error": "An internal error occurred. Please try again later."}

@@ -1,5 +1,4 @@
 import google.generativeai as genai
-from config import GEMINI_API_KEY
 import json
 import re
 
@@ -9,7 +8,7 @@ model=genai.GenerativeModel("gemini-1.5-flash")
 
 def j_get_guidance(symptoms: str) -> dict:
     prompt = f"""
-You are an expert hospital triage assistant.
+You know only medical advice.
 
 A patient says: "{symptoms}"
 
@@ -38,28 +37,44 @@ Based on medical knowledge, return a JSON object like:
         "next_steps": "Consult a general physician"
     }
 
-def ask_insurance(pdf_text: str, user_question: str) -> str:
-    """
-    Uses Gemini to answer a question based on the provided insurance PDF text.
-    """
+def ask_insurance(extracted_text: str, user_message: str) -> str:
     prompt = f"""
-You are an expert in understanding insurance documents.
-Here is the content of a user's insurance PDF:
+You are a hospital assistant who helps patients understand their insurance documents.
 
------ START OF INSURANCE PDF -----
-{pdf_text}
------ END OF INSURANCE PDF -----
+Here is the content extracted from a patient's insurance PDF:
 
-Now answer the user's question based on this document only.
+--- START OF PDF ---
+{extracted_text.strip()}
+--- END OF PDF ---
 
-Question: "{user_question}"
+The patient asked: "{user_message}"
 
-Respond in a helpful, friendly way with specific details from the document.
-If the document doesn't contain the answer, say so politely.
+Based on the PDF and the patient's question, give a helpful, concise answer. Do not ignore the document content. Be specific.
 """
+    response = model.generate_content(prompt)
+    return response.text
 
-    try:
-        response = model.generate_content(prompt)
-        return response.text
-    except Exception as e:
-        return f"⚠️ Error while querying Gemini: {str(e)}"
+def categorize_message(message: str) -> str:
+    prompt = f"""
+You are a hospital assistant.
+
+Categorize the user's message into one of the following:
+- "symptom": if they are describing any physical or mental health complaints, like pain, fever, fatigue, etc.
+- "insurance": if the message is about insurance coverage, claims, billing, policy duration, or similar.
+
+Only respond with one word: either "symptom" or "insurance". Do NOT explain.
+
+Message:
+\"\"\"{message}\"\"\"
+"""
+    response = model.generate_content(prompt)
+    return response.text.strip().lower()
+
+import pdfplumber
+
+def extract_text_from_pdf(path: str) -> str:
+    full_text = ""
+    with pdfplumber.open(path) as pdf:
+        for page in pdf.pages:
+            full_text += page.extract_text() or ""
+    return full_text.strip()
